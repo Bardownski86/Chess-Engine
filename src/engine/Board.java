@@ -53,6 +53,14 @@ public class Board {
         return sq/8;
     }
 
+    /**
+     * The square in algebraic notation, for example {@code e4}. Square 0 is a1,
+     * so file 0 is the a file and rank 0 is rank 1.
+     */
+    public static String squareName(int sq) {
+        return "" + (char) ('a' + fileOf(sq)) + (char) ('1' + rankOf(sq));
+    }
+
     private char pieceChar(int piece) {
         if(piece == 0) {
             return '.';
@@ -72,6 +80,7 @@ public class Board {
         return letter;
 
     }
+    @Override
     public String toString() {
         String notedBoard = "";
         for(int rank = 7; rank >= 0; rank--){
