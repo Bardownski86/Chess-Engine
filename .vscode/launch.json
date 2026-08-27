@@ -6,6 +6,12 @@
             "name": "Run Driver",
             "request": "launch",
             "mainClass": "engine.Driver"
+        },
+        {
+            "type": "java",
+            "name": "Run SelfTest",
+            "request": "launch",
+            "mainClass": "engine.SelfTest"
         }
     ]
 }
