@@ -92,6 +92,9 @@ public class Board {
         int piece = squares[from];
         int pieceType = Math.abs(piece);
 
+        assert ply < MAX_PLY : "undo stack overflow at ply " + ply;
+        assert piece != 0 : "no piece to move on " + squareName(from);
+
         Undo undo = history[ply];
         undo.whiteCanCastleKingside = whiteCanCastleKingside;
         undo.whiteCanCastleQueenside = whiteCanCastleQueenside;
@@ -148,6 +151,8 @@ public class Board {
     public void unmakeMove(int move) {
         int from = Move.from(move);
         int to = Move.to(move);
+
+        assert ply > 0 : "unmakeMove with nothing left to unmake";
 
         // Flip first, so sideToMove names the side that played this move.
         sideToMove = -sideToMove;

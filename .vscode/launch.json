@@ -5,13 +5,15 @@
             "type": "java",
             "name": "Run Driver",
             "request": "launch",
-            "mainClass": "engine.Driver"
+            "mainClass": "engine.Driver",
+            "vmArgs": "-ea"
         },
         {
             "type": "java",
             "name": "Run SelfTest",
             "request": "launch",
-            "mainClass": "engine.SelfTest"
+            "mainClass": "engine.SelfTest",
+            "vmArgs": "-ea"
         }
     ]
 }

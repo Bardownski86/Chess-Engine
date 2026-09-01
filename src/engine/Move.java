@@ -59,7 +59,16 @@ public final class Move {
     private Move() {
     }
 
+    /**
+     * The range checks are assertions rather than masks on purpose. Masking an
+     * off-board square would quietly turn it into a different, legal looking
+     * move; an assertion stops at the call site that produced it. They cost
+     * nothing unless the JVM is started with -ea, which the launch configs do.
+     */
     public static int of(int from, int to, int flag) {
+        assert from >= 0 && from < 64 : "from square out of range: " + from;
+        assert to >= 0 && to < 64 : "to square out of range: " + to;
+        assert flag >= 0 && flag <= FLAG_MASK : "flag out of range: " + flag;
         return from | (to << TO_SHIFT) | (flag << FLAG_SHIFT);
     }
 
