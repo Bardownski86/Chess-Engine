@@ -3,16 +3,31 @@
     "configurations": [
         {
             "type": "java",
-            "name": "Run Driver",
+            "name": "Run SelfTest",
             "request": "launch",
-            "mainClass": "engine.Driver",
+            "mainClass": "engine.SelfTest",
             "vmArgs": "-ea"
         },
         {
             "type": "java",
-            "name": "Run SelfTest",
+            "name": "Run PerftTest",
             "request": "launch",
-            "mainClass": "engine.SelfTest",
+            "mainClass": "engine.PerftTest",
+            "vmArgs": "-ea"
+        },
+        {
+            "type": "java",
+            "name": "Run PerftTest (depth 5)",
+            "request": "launch",
+            "mainClass": "engine.PerftTest",
+            "vmArgs": "-ea",
+            "args": "5"
+        },
+        {
+            "type": "java",
+            "name": "Run Driver",
+            "request": "launch",
+            "mainClass": "engine.Driver",
             "vmArgs": "-ea"
         }
     ]
