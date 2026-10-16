@@ -75,6 +75,9 @@ public final class Fen {
         board.halfmoveClock = fields.length > 4 ? Integer.parseInt(fields[4]) : 0;
         board.fullmoveNumber = fields.length > 5 ? Integer.parseInt(fields[5]) : 1;
 
+        // The squares and flags were written directly, so the key from the
+        // constructor describes the start position and has to be redone.
+        board.refreshHash();
         return board;
     }
 

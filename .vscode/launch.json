@@ -3,6 +3,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "Run Uci (engine for a chess GUI)",
+            "request": "launch",
+            "mainClass": "engine.Uci",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "java",
             "name": "Run SelfTest",
             "request": "launch",
             "mainClass": "engine.SelfTest",
@@ -20,8 +27,14 @@
             "name": "Run PerftTest (depth 5)",
             "request": "launch",
             "mainClass": "engine.PerftTest",
-            "vmArgs": "-ea",
             "args": "5"
+        },
+        {
+            "type": "java",
+            "name": "Run SelfPlay",
+            "request": "launch",
+            "mainClass": "engine.SelfPlay",
+            "vmArgs": "-ea"
         },
         {
             "type": "java",

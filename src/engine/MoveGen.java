@@ -84,6 +84,12 @@ public final class MoveGen {
         return count;
     }
 
+    /** Whether {@code side} is in check right now. */
+    public static boolean isInCheck(Board board, int side) {
+        int kingSquare = findKing(board, side);
+        return kingSquare >= 0 && isSquareAttacked(board, kingSquare, -side);
+    }
+
     private static int findKing(Board board, int side) {
         int king = Board.KING * side;
         for (int sq = 0; sq < 64; sq++) {

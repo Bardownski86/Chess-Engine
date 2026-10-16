@@ -25,6 +25,12 @@ public class Board {
     int fullmoveNumber;
 
     /**
+     * Zobrist key of the current position, maintained incrementally. Used to
+     * recognise a position the game has already been in.
+     */
+    long hash;
+
+    /**
      * State that a move destroys and that cannot be reconstructed from the move
      * itself, saved so unmakeMove can put it back. Preallocated once: search
      * calls make/unmake millions of times and should not allocate per move.
@@ -46,6 +52,35 @@ public class Board {
             history[i] = new Undo();
         }
         ply = 0;
+        hash = Zobrist.compute(this);
+    }
+
+    public long hash() {
+        return hash;
+    }
+
+    /**
+     * Recomputes the key from scratch. Needed after anything sets up a position
+     * by writing squares and flags directly rather than by playing moves.
+     */
+    public void refreshHash() {
+        hash = Zobrist.compute(this);
+    }
+
+    /**
+     * Whether the current position has occurred before in this game. Only looks
+     * back as far as the halfmove clock, since a pawn move or a capture makes
+     * every earlier position unreachable, and in steps of two because a
+     * repetition has to have the same side to move.
+     */
+    public boolean isRepetition() {
+        int limit = Math.min(ply, halfmoveClock);
+        for (int back = 2; back <= limit; back += 2) {
+            if (history[ply - back].hash == hash) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static int square(int rank, int file) {
@@ -102,6 +137,11 @@ public class Board {
         undo.blackCanCastleQueenside = blackCanCastleQueenside;
         undo.enPassantSquare = enPassantSquare;
         undo.halfmoveClock = halfmoveClock;
+        undo.hash = hash;
+
+        // Castling rights and the en passant file are XORed out as a block
+        // before they change, and the new value XORed back in at the end.
+        hash ^= Zobrist.state(this);
 
         // Read the victim off the board rather than trusting the capture flag,
         // so an imprecise flag cannot corrupt the saved undo state.
@@ -109,20 +149,29 @@ public class Board {
             int victim = enPassantVictimSquare(from, to);
             undo.captured = squares[victim];
             squares[victim] = 0;
+            hash ^= Zobrist.piece(undo.captured, victim);
         } else {
             undo.captured = squares[to];
+            if (undo.captured != 0) {
+                hash ^= Zobrist.piece(undo.captured, to);
+            }
         }
         ply++;
 
         squares[to] = Move.isPromotion(move) ? Move.promotionPiece(move) * sideToMove : piece;
         squares[from] = 0;
+        hash ^= Zobrist.piece(piece, from);
+        hash ^= Zobrist.piece(squares[to], to);
 
         if (Move.isCastle(move)) {
             boolean kingside = Move.flag(move) == Move.FLAG_CASTLE_KINGSIDE;
             int rookFrom = kingside ? to + 1 : to - 2;
             int rookTo = kingside ? to - 1 : to + 1;
-            squares[rookTo] = squares[rookFrom];
+            int rook = squares[rookFrom];
+            squares[rookTo] = rook;
             squares[rookFrom] = 0;
+            hash ^= Zobrist.piece(rook, rookFrom);
+            hash ^= Zobrist.piece(rook, rookTo);
         }
 
         if (pieceType == KING) {
@@ -146,6 +195,11 @@ public class Board {
             fullmoveNumber++;
         }
         sideToMove = -sideToMove;
+
+        hash ^= Zobrist.state(this);
+        hash ^= Zobrist.SIDE;
+        assert hash == Zobrist.compute(this)
+            : "incremental hash diverged after " + Move.toUci(move);
     }
 
     public void unmakeMove(int move) {
@@ -186,6 +240,11 @@ public class Board {
         blackCanCastleQueenside = undo.blackCanCastleQueenside;
         enPassantSquare = undo.enPassantSquare;
         halfmoveClock = undo.halfmoveClock;
+
+        // Restoring the saved key is exact, so unmake cannot drift.
+        hash = undo.hash;
+        assert hash == Zobrist.compute(this)
+            : "hash wrong after unmaking " + Move.toUci(move);
     }
 
     private char pieceChar(int piece) {
@@ -221,6 +280,7 @@ public class Board {
 
     private static final class Undo {
         int captured;
+        long hash;
         boolean whiteCanCastleKingside, whiteCanCastleQueenside;
         boolean blackCanCastleKingside, blackCanCastleQueenside;
         int enPassantSquare;

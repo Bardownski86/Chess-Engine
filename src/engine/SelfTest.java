@@ -39,6 +39,9 @@ public class SelfTest {
     }
 
     static void roundTrip(String name, Board b, int move) {
+        // These positions are built by writing squares directly, so the Zobrist
+        // key has to be reseeded before any move is made on them.
+        b.refreshHash();
         String before = sig(b);
         b.makeMove(move);
         b.unmakeMove(move);
