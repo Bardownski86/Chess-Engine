@@ -30,6 +30,14 @@ public final class Uci {
     /** Fraction of the remaining clock to spend on one move. */
     private static final int MOVES_TO_GO_ASSUMED = 30;
 
+    /**
+     * Held back from every time allowance. An engine that spends its whole
+     * budget still arrives late, because the clock the referee keeps also
+     * covers writing the move out and reading it back; arbiters score that as
+     * losing on time. Cute Chess forfeited every game until this existed.
+     */
+    private static final long MOVE_OVERHEAD_MS = 60;
+
     private Uci() {
     }
 
@@ -180,9 +188,12 @@ public final class Uci {
 
         long budget;
         if (moveTime > 0) {
-            budget = moveTime;
+            // Never spend the whole allowance: see MOVE_OVERHEAD_MS. On a very
+            // short allowance keep most of it rather than reserving it all.
+            budget = Math.max(moveTime / 2, moveTime - MOVE_OVERHEAD_MS);
         } else if (myTime > 0) {
-            budget = Math.max(10, myTime / MOVES_TO_GO_ASSUMED + myIncrement / 2);
+            long share = myTime / MOVES_TO_GO_ASSUMED + myIncrement / 2;
+            budget = Math.max(10, Math.min(share, myTime - MOVE_OVERHEAD_MS));
         } else {
             budget = infinite ? 60_000 : DEFAULT_MOVE_MS;
         }
