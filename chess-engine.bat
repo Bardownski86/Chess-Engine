@@ -1,4 +1,5 @@
 @echo off
-rem Launcher for UCI chess GUIs (Arena, Cute Chess, En Croissant, Banksia).
-rem Point the GUI at this file as the engine executable.
-java -cp "%~dp0bin" engine.Uci
+rem UCI engine launcher for chess GUIs and for lichess-bot.
+rem Runs the self-contained jar, so it cannot pick up a stale class file.
+rem If the jar is missing, run build.bat first.
+java -jar "%~dp0chess-engine.jar" %*
