@@ -255,6 +255,32 @@ public class SelfTest {
         Board ep = Fen.parse("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 3");
         expect(ep.enPassantSquare == sq(5, 3), "FEN reads the en passant square");
 
+        // --- every opening book line must be legal from the start ---
+        int bookPlies = 0;
+        for (String bookLine : Book.lines()) {
+            Board bb = Fen.parse(Fen.START);
+            String[] bookMoves = bookLine.split(" ");
+            for (int i = 0; i < bookMoves.length; i++) {
+                int[] legal = new int[MoveGen.MAX_MOVES];
+                int n = MoveGen.generate(bb, legal);
+                int found = Move.NONE;
+                for (int j = 0; j < n; j++) {
+                    if (Move.toUci(legal[j]).equals(bookMoves[i])) {
+                        found = legal[j];
+                        break;
+                    }
+                }
+                expect(found != Move.NONE,
+                    "book line illegal at ply " + (i + 1) + " (" + bookMoves[i] + "): " + bookLine);
+                if (found == Move.NONE) {
+                    break;
+                }
+                bb.makeMove(found);
+                bookPlies++;
+            }
+        }
+        System.out.println("book: " + Book.lines().length + " lines, " + bookPlies + " plies");
+
         System.out.println(failures == 0 ? "ALL CHECKS PASSED" : failures + " CHECKS FAILED");
     }
 }

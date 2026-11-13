@@ -38,6 +38,16 @@ public final class Uci {
      */
     private static final long MOVE_OVERHEAD_MS = 60;
 
+    /**
+     * The moves of the current game, in order, when it started from the
+     * standard position. The book is indexed by that sequence, and a GUI
+     * re-sends the whole game every turn, so this is rebuilt each time rather
+     * than accumulated.
+     */
+    private static final java.util.List<String> gameMoves = new java.util.ArrayList<>();
+    private static boolean fromStartPosition = true;
+    private static boolean useBook = true;
+
     private Uci() {
     }
 
@@ -59,6 +69,7 @@ public final class Uci {
                     send("id name " + NAME);
                     send("id author " + AUTHOR);
                     send("option name Hash type spin default " + Search.DEFAULT_HASH_MB + " min 1 max 1024");
+                    send("option name OwnBook type check default true");
                     send("uciok");
                     break;
                 case "isready":
@@ -108,7 +119,15 @@ public final class Uci {
                 value = tokens[i + 1];
             }
         }
-        if (name == null || !name.equalsIgnoreCase("Hash") || value == null) {
+        if (name == null || value == null) {
+            return;
+        }
+        if (name.equalsIgnoreCase("OwnBook")) {
+            useBook = Boolean.parseBoolean(value);
+            send("info string opening book " + (useBook ? "on" : "off"));
+            return;
+        }
+        if (!name.equalsIgnoreCase("Hash")) {
             return;
         }
         try {
@@ -129,6 +148,7 @@ public final class Uci {
         Board board;
         int i;
 
+        gameMoves.clear();
         if (tokens.length > 1 && tokens[1].equals("fen")) {
             StringBuilder fen = new StringBuilder();
             i = 2;
@@ -137,9 +157,13 @@ public final class Uci {
                 i++;
             }
             board = Fen.parse(fen.toString().trim());
+            // The book is indexed from the start position, so it cannot be
+            // used for a game that began somewhere else.
+            fromStartPosition = false;
         } else {
             board = Fen.parse(Fen.START);
             i = 2;
+            fromStartPosition = true;
         }
 
         if (i < tokens.length && tokens[i].equals("moves")) {
@@ -150,6 +174,7 @@ public final class Uci {
                     break;
                 }
                 board.makeMove(move);
+                gameMoves.add(Move.toUci(move));
             }
         }
         return board;
@@ -242,6 +267,16 @@ public final class Uci {
             budget = Math.max(10, Math.min(share, cap));
         } else {
             budget = infinite ? 60_000 : DEFAULT_MOVE_MS;
+        }
+
+        // A book move needs no thinking and costs no clock.
+        if (useBook && fromStartPosition) {
+            int bookMove = Book.probe(gameMoves, board);
+            if (bookMove != Move.NONE) {
+                send("info string book move");
+                send("bestmove " + Move.toUci(bookMove));
+                return;
+            }
         }
 
         int best = search.findBestMove(board, depth, budget);

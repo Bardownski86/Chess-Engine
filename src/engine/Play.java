@@ -133,8 +133,17 @@ public class Play {
                 System.out.println("you played " + Move.toUci(chosen));
                 System.out.println();
             } else {
-                System.out.println("thinking...");
-                int reply = search.findBestMove(board, 64, thinkMs);
+                java.util.List<String> uciSoFar = new java.util.ArrayList<>();
+                for (int i = 0; i < playedCount; i++) {
+                    uciSoFar.add(Move.toUci(played[i]));
+                }
+                int reply = Book.probe(uciSoFar, board);
+                if (reply != Move.NONE) {
+                    System.out.println("(book)");
+                } else {
+                    System.out.println("thinking...");
+                    reply = search.findBestMove(board, 64, thinkMs);
+                }
                 if (reply == Move.NONE) {
                     System.out.println("The engine has no move.");
                     return;
