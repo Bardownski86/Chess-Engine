@@ -140,6 +140,7 @@ public final class Uci {
         long moveTime = -1;
         long myTime = -1;
         long myIncrement = 0;
+        long movesToGo = 0;
         boolean infinite = false;
 
         for (int i = 1; i < tokens.length; i++) {
@@ -178,6 +179,9 @@ public final class Uci {
                         i++;
                     }
                     break;
+                case "movestogo":
+                    movesToGo = Long.parseLong(tokens[++i]);
+                    break;
                 case "infinite":
                     infinite = true;
                     break;
@@ -192,8 +196,18 @@ public final class Uci {
             // short allowance keep most of it rather than reserving it all.
             budget = Math.max(moveTime / 2, moveTime - MOVE_OVERHEAD_MS);
         } else if (myTime > 0) {
-            long share = myTime / MOVES_TO_GO_ASSUMED + myIncrement / 2;
-            budget = Math.max(10, Math.min(share, myTime - MOVE_OVERHEAD_MS));
+            // Spread the clock over the moves actually left when the GUI says
+            // how many there are, rather than guessing. The two spare moves
+            // stop the allowance ballooning on the last move before the clock
+            // is topped up.
+            long horizon = movesToGo > 0 ? movesToGo + 2 : MOVES_TO_GO_ASSUMED;
+            // Most of the increment is spendable: it is credited back after
+            // the move, so using it does not eat into the base clock.
+            long share = myTime / horizon + myIncrement * 3 / 4;
+            // Never commit more than a third of what is left. One slow move
+            // should not be able to lose the game on time by itself.
+            long cap = Math.min(myTime - MOVE_OVERHEAD_MS, myTime / 3);
+            budget = Math.max(10, Math.min(share, cap));
         } else {
             budget = infinite ? 60_000 : DEFAULT_MOVE_MS;
         }

@@ -24,6 +24,14 @@ public final class Search {
     /** Search depth plus however far quiescence runs on top of it. */
     private static final int MAX_PLY = 128;
 
+    /**
+     * Rough cost of the next depth as a multiple of the one just finished.
+     * Alpha-beta with decent ordering lands somewhere around three to six; the
+     * low end is deliberate, so a borderline iteration is attempted rather than
+     * skipped.
+     */
+    private static final int BRANCHING_ESTIMATE = 3;
+
     private final int[][] moveBuffers = new int[MAX_PLY][MoveGen.MAX_MOVES];
     private final int[][] scoreBuffers = new int[MAX_PLY][MoveGen.MAX_MOVES];
 
@@ -57,7 +65,9 @@ public final class Search {
      * did not finish is thrown away and the previous one stands.
      */
     public int findBestMove(Board board, int maxDepth, long timeMs) {
-        deadline = System.currentTimeMillis() + Math.max(1, timeMs);
+        long start = System.currentTimeMillis();
+        long budget = Math.max(1, timeMs);
+        deadline = start + budget;
         stopped = false;
         nodes = 0;
         bestMoveRoot = Move.NONE;
@@ -72,6 +82,15 @@ public final class Search {
         }
         int best = rootMoves[0];
 
+        // Only one legal reply: thinking about it cannot change it, and the
+        // time is worth more on a move that has a decision in it.
+        if (rootCount == 1) {
+            lastDepth = 1;
+            System.out.println("info depth 1 nodes 0 time 0 pv " + Move.toUci(best));
+            return best;
+        }
+
+        long iterationStart = start;
         for (int depth = 1; depth <= Math.min(maxDepth, MAX_PLY - 2); depth++) {
             int score = negamax(board, depth, -INFINITY, INFINITY, 0, true);
             if (stopped) {
@@ -80,11 +99,25 @@ public final class Search {
             best = bestMoveRoot;
             lastScore = score;
             lastDepth = depth;
+
+            long now = System.currentTimeMillis();
+            long iterationMs = now - iterationStart;
+            iterationStart = now;
+            long elapsed = now - start;
+
             System.out.println("info depth " + depth + " score " + scoreToUci(score)
-                + " nodes " + nodes + " pv " + Move.toUci(best));
+                + " nodes " + nodes + " time " + elapsed + " pv " + Move.toUci(best));
 
             // A forced mate is found; no deeper search changes the move.
             if (Math.abs(score) > MATE - MAX_PLY) {
+                break;
+            }
+
+            // Each depth costs several times the one before it. Starting one
+            // that cannot finish spends the rest of the allowance on a result
+            // that is then thrown away, so stop here instead and keep the time
+            // for a move that can still use it.
+            if (elapsed + iterationMs * BRANCHING_ESTIMATE > budget) {
                 break;
             }
         }
