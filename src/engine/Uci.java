@@ -58,6 +58,7 @@ public final class Uci {
                 case "uci":
                     send("id name " + NAME);
                     send("id author " + AUTHOR);
+                    send("option name Hash type spin default " + Search.DEFAULT_HASH_MB + " min 1 max 1024");
                     send("uciok");
                     break;
                 case "isready":
@@ -65,6 +66,10 @@ public final class Uci {
                     break;
                 case "ucinewgame":
                     board = Fen.parse(Fen.START);
+                    search.newGame();
+                    break;
+                case "setoption":
+                    setOption(search, tokens);
                     break;
                 case "position":
                     board = parsePosition(tokens);
@@ -85,6 +90,33 @@ public final class Uci {
                     send("info string unknown command: " + tokens[0]);
                     break;
             }
+        }
+    }
+
+    /**
+     * Handles {@code setoption name X value Y}. Only Hash is supported;
+     * anything else is accepted silently, because a GUI setting an option the
+     * engine does not have is not worth complaining about.
+     */
+    private static void setOption(Search search, String[] tokens) {
+        String name = null;
+        String value = null;
+        for (int i = 1; i < tokens.length - 1; i++) {
+            if (tokens[i].equals("name")) {
+                name = tokens[i + 1];
+            } else if (tokens[i].equals("value")) {
+                value = tokens[i + 1];
+            }
+        }
+        if (name == null || !name.equalsIgnoreCase("Hash") || value == null) {
+            return;
+        }
+        try {
+            int megabytes = Math.max(1, Math.min(1024, Integer.parseInt(value)));
+            search.setHashSize(megabytes);
+            send("info string hash set to " + megabytes + " MB");
+        } catch (NumberFormatException e) {
+            send("info string bad Hash value: " + value);
         }
     }
 

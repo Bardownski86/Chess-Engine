@@ -32,6 +32,20 @@ public final class Search {
      */
     private static final int BRANCHING_ESTIMATE = 3;
 
+    /** Default transposition table size in megabytes; the GUI can change it. */
+    public static final int DEFAULT_HASH_MB = 64;
+
+    private final TranspositionTable table = new TranspositionTable(DEFAULT_HASH_MB);
+
+    /** Forgets everything learned in the previous game. */
+    public void newGame() {
+        table.clear();
+    }
+
+    public void setHashSize(int megabytes) {
+        table.resize(megabytes);
+    }
+
     private final int[][] moveBuffers = new int[MAX_PLY][MoveGen.MAX_MOVES];
     private final int[][] scoreBuffers = new int[MAX_PLY][MoveGen.MAX_MOVES];
 
@@ -141,6 +155,28 @@ public final class Search {
             return quiesce(board, alpha, beta, ply);
         }
 
+        int alphaAtEntry = alpha;
+        long key = board.hash();
+        long entry = table.probe(key);
+        int tableMove = Move.NONE;
+
+        if (entry != 0) {
+            // Worth having even when the stored depth is too shallow to trust:
+            // the move that was best last time is the one to try first.
+            tableMove = TranspositionTable.move(entry);
+
+            // Never cut off at the root, which has to produce a move.
+            if (!isRoot && TranspositionTable.depth(entry) >= depth) {
+                int stored = scoreFromTable(TranspositionTable.score(entry), ply);
+                int storedFlag = TranspositionTable.flag(entry);
+                if (storedFlag == TranspositionTable.EXACT
+                        || (storedFlag == TranspositionTable.LOWER && stored >= beta)
+                        || (storedFlag == TranspositionTable.UPPER && stored <= alpha)) {
+                    return stored;
+                }
+            }
+        }
+
         int[] moves = moveBuffers[ply];
         int count = MoveGen.generate(board, moves);
         if (count == 0) {
@@ -149,9 +185,10 @@ public final class Search {
             // mates as equal.
             return MoveGen.isInCheck(board, board.sideToMove) ? -MATE + ply : 0;
         }
-        orderMoves(board, moves, count, ply);
+        orderMoves(board, moves, count, ply, tableMove);
 
         int best = -INFINITY;
+        int bestMove = moves[0];
         for (int i = 0; i < count; i++) {
             board.makeMove(moves[i]);
             int score = -negamax(board, depth - 1, -beta, -alpha, ply + 1, false);
@@ -162,6 +199,7 @@ public final class Search {
             }
             if (score > best) {
                 best = score;
+                bestMove = moves[i];
                 if (isRoot) {
                     bestMoveRoot = moves[i];
                 }
@@ -173,7 +211,37 @@ public final class Search {
                 break; // the opponent would never let this line happen
             }
         }
+
+        int flag = best <= alphaAtEntry ? TranspositionTable.UPPER
+            : best >= beta ? TranspositionTable.LOWER
+            : TranspositionTable.EXACT;
+        table.store(key, depth, scoreToTable(best, ply), flag, bestMove);
         return best;
+    }
+
+    /**
+     * A mate score means "mate in N from here", so it cannot be stored as-is:
+     * the same position reached at a different ply would read back a wrong
+     * distance. Stored relative to the node, restored relative to the root.
+     */
+    private static int scoreToTable(int score, int ply) {
+        if (score > MATE - MAX_PLY) {
+            return score + ply;
+        }
+        if (score < -MATE + MAX_PLY) {
+            return score - ply;
+        }
+        return score;
+    }
+
+    private static int scoreFromTable(int score, int ply) {
+        if (score > MATE - MAX_PLY) {
+            return score - ply;
+        }
+        if (score < -MATE + MAX_PLY) {
+            return score + ply;
+        }
+        return score;
     }
 
     private int quiesce(Board board, int alpha, int beta, int ply) {
@@ -207,7 +275,7 @@ public final class Search {
                 moves[tactical++] = moves[i];
             }
         }
-        orderMoves(board, moves, tactical, ply);
+        orderMoves(board, moves, tactical, ply, Move.NONE);
 
         int best = standPat;
         for (int i = 0; i < tactical; i++) {
@@ -232,10 +300,10 @@ public final class Search {
     }
 
     /** Most valuable victim, least valuable attacker, promotions near the front. */
-    private void orderMoves(Board board, int[] moves, int count, int ply) {
+    private void orderMoves(Board board, int[] moves, int count, int ply, int tableMove) {
         int[] scores = scoreBuffers[ply];
         for (int i = 0; i < count; i++) {
-            scores[i] = scoreMove(board, moves[i]);
+            scores[i] = moves[i] == tableMove ? Integer.MAX_VALUE : scoreMove(board, moves[i]);
         }
         // Selection sort: counts are small and this avoids boxing into a list.
         for (int i = 0; i < count - 1; i++) {
