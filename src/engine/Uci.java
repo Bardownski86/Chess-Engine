@@ -28,7 +28,7 @@ public final class Uci {
     private static final long DEFAULT_MOVE_MS = 3_000;
 
     /** Fraction of the remaining clock to spend on one move. */
-    private static final int MOVES_TO_GO_ASSUMED = 30;
+    private static final int MOVES_TO_GO_ASSUMED = 20;
 
     /**
      * Held back from every time allowance. An engine that spends its whole
@@ -247,11 +247,13 @@ public final class Uci {
             }
         }
 
-        long budget;
+        long soft;
+        long hard;
         if (moveTime > 0) {
-            // Never spend the whole allowance: see MOVE_OVERHEAD_MS. On a very
-            // short allowance keep most of it rather than reserving it all.
-            budget = Math.max(moveTime / 2, moveTime - MOVE_OVERHEAD_MS);
+            // movetime is an instruction, not a clock: spend it, less the
+            // reserve, and do not hold anything back for later moves.
+            soft = Math.max(moveTime / 2, moveTime - MOVE_OVERHEAD_MS);
+            hard = soft;
         } else if (myTime > 0) {
             // Spread the clock over the moves actually left when the GUI says
             // how many there are, rather than guessing. The two spare moves
@@ -260,13 +262,19 @@ public final class Uci {
             long horizon = movesToGo > 0 ? movesToGo + 2 : MOVES_TO_GO_ASSUMED;
             // Most of the increment is spendable: it is credited back after
             // the move, so using it does not eat into the base clock.
-            long share = myTime / horizon + myIncrement * 3 / 4;
-            // Never commit more than a third of what is left. One slow move
-            // should not be able to lose the game on time by itself.
-            long cap = Math.min(myTime - MOVE_OVERHEAD_MS, myTime / 3);
-            budget = Math.max(10, Math.min(share, cap));
+            soft = myTime / horizon + myIncrement * 3 / 4;
+
+            // A fixed reserve would swallow a clock that is nearly gone, so on
+            // a short clock it scales down with what is left.
+            long reserve = Math.min(MOVE_OVERHEAD_MS, Math.max(5, myTime / 10));
+            // Half the remaining clock is the most one move may ever take. The
+            // engine can genuinely lose on time from here, which is the point:
+            // it is allowed to think when thinking is what the position needs.
+            hard = Math.max(10, Math.min(myTime / 2, myTime - reserve));
+            soft = Math.max(10, Math.min(soft, hard));
         } else {
-            budget = infinite ? 60_000 : DEFAULT_MOVE_MS;
+            soft = infinite ? 60_000 : DEFAULT_MOVE_MS;
+            hard = soft;
         }
 
         // A book move needs no thinking and costs no clock.
@@ -279,7 +287,7 @@ public final class Uci {
             }
         }
 
-        int best = search.findBestMove(board, depth, budget);
+        int best = search.findBestMove(board, depth, soft, hard);
         send("bestmove " + (best == Move.NONE ? "0000" : Move.toUci(best)));
     }
 }

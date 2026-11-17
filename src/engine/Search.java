@@ -79,9 +79,28 @@ public final class Search {
      * did not finish is thrown away and the previous one stands.
      */
     public int findBestMove(Board board, int maxDepth, long timeMs) {
+        return findBestMove(board, maxDepth, timeMs, timeMs);
+    }
+
+    /**
+     * Searches with two budgets.
+     *
+     * <p>{@code softMs} is what the move is normally worth: once a completed
+     * depth leaves too little of it for the next one, the search stops and the
+     * rest of the clock is kept for later moves.
+     *
+     * <p>{@code hardMs} is the ceiling, and it is only reached when the search
+     * is still unsettled -- when the best move at the root changed on the last
+     * iteration. A position whose answer keeps moving is exactly the one worth
+     * spending extra on; a stable one is not. The search is aborted outright at
+     * the hard limit, so this is also what stops the engine overrunning the
+     * clock entirely.
+     */
+    public int findBestMove(Board board, int maxDepth, long softMs, long hardMs) {
         long start = System.currentTimeMillis();
-        long budget = Math.max(1, timeMs);
-        deadline = start + budget;
+        long soft = Math.max(1, softMs);
+        long hard = Math.max(soft, hardMs);
+        deadline = start + hard;
         stopped = false;
         nodes = 0;
         bestMoveRoot = Move.NONE;
@@ -105,6 +124,7 @@ public final class Search {
         }
 
         long iterationStart = start;
+        int previousBest = Move.NONE;
         for (int depth = 1; depth <= Math.min(maxDepth, MAX_PLY - 2); depth++) {
             int score = negamax(board, depth, -INFINITY, INFINITY, 0, true);
             if (stopped) {
@@ -127,11 +147,17 @@ public final class Search {
                 break;
             }
 
+            // An answer that is still moving is worth paying for; a settled one
+            // is not. So a changed root move buys access to the hard ceiling,
+            // and a stable one is held to the soft target.
+            boolean unsettled = depth > 1 && best != previousBest;
+            previousBest = best;
+            long limit = unsettled ? hard : soft;
+
             // Each depth costs several times the one before it. Starting one
             // that cannot finish spends the rest of the allowance on a result
-            // that is then thrown away, so stop here instead and keep the time
-            // for a move that can still use it.
-            if (elapsed + iterationMs * BRANCHING_ESTIMATE > budget) {
+            // that is then thrown away.
+            if (elapsed + iterationMs * BRANCHING_ESTIMATE > limit) {
                 break;
             }
         }
